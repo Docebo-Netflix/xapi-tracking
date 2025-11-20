@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <style>
+        body { margin: 0; padding: 0; overflow: hidden; }
+    </style>
+</head>
+<body>
+<script>
+// Watershed Configuration
+const WATERSHED = {
+    endpoint: 'https://sandbox.watershedlrs.com/api/organizations/13332/lrs/',
+    auth: 'Basic ' + btoa('dbfc6a0b272af2:a6f64b521d66e5')
+};
+
+// Send xAPI statement
+function sendStatement(verb, verbDisplay, objectId, objectName, objectDescription) {
+    const statement = {
+        actor: {
+            mbox: "mailto:user@netflix.com", // Will be dynamically set
+            name: "Netflix User"
+        },
+        verb: {
+            id: verb,
+            display: { "en-US": verbDisplay }
+        },
+        object: {
+            id: objectId,
+            objectType: "Activity",
+            definition: {
+                name: { "en-US": objectName },
+                description: { "en-US": objectDescription },
+                type: "http://adlnet.gov/expapi/activities/course"
+            }
+        },
+        timestamp: new Date().toISOString(),
+        context: {
+            platform: "DOCEBO LMS",
+            language: "en-US"
+        }
+    };
+
+    fetch(WATERSHED.endpoint + 'statements', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': WATERSHED.auth,
+            'X-Experience-API-Version': '1.0.3'
+        },
+        body: JSON.stringify(statement)
+    })
+    .then(response => console.log('xAPI sent:', verbDisplay, objectName))
+    .catch(error => console.error('xAPI error:', error));
+}
+
+// Listen for messages from parent page
+window.addEventListener('message', function(event) {
+    // Security: verify origin if needed
+    // if (event.origin !== 'https://learn.netflix.net') return;
+    
+    const data = event.data;
+    
+    if (data.action === 'trackClick') {
+        sendStatement(
+            'http://adlnet.gov/expapi/verbs/launched',
+            'launched',
+            data.objectId || window.location.href,
+            data.objectName || 'Unknown',
+            data.objectDescription || ''
+        );
+    } else if (data.action === 'trackView') {
+        sendStatement(
+            'http://adlnet.gov/expapi/verbs/viewed',
+            'viewed',
+            data.objectId || window.location.href,
+            data.objectName || 'Page View',
+            data.objectDescription || ''
+        );
+    }
+});
+
+// Track page view on load
+window.addEventListener('load', function() {
+    // Get user info from URL parameters if passed
+    const urlParams = new URLSearchParams(window.location.search);
+    const userEmail = urlParams.get('email') || 'unknown@netflix.com';
+    const userName = urlParams.get('name') || 'Unknown User';
+    
+    // Send page view
+    sendStatement(
+        'http://adlnet.gov/expapi/verbs/viewed',
+        'viewed',
+        document.referrer || 'https://learn.netflix.net/nec',
+        'NEC Welcome Lounge',
+        'User viewed Welcome Lounge page'
+    );
+});
+
+// Expose function to parent window
+window.trackEvent = function(eventType, eventData) {
+    if (eventType === 'launch') {
+        sendStatement(
+            'http://adlnet.gov/expapi/verbs/launched',
+            'launched',
+            eventData.url,
+            eventData.name,
+            eventData.description
+        );
+    }
+};
+</script>
+</body>
+</html>
