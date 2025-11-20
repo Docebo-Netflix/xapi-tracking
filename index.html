@@ -1,114 +1,752 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NEC xAPI Tracker</title>
     <style>
-        body { margin: 0; padding: 0; overflow: hidden; }
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+            background: transparent;
+            padding: 0;
+        }
+
+        /* Debug Panel - Remove this section for production */
+        .debug-panel {
+            background: #fff;
+            border: 2px solid #E50914;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px;
+            max-width: 800px;
+            display: none; /* Set to 'block' to see debug info */
+        }
+
+        .debug-panel h2 {
+            color: #E50914;
+            margin-bottom: 15px;
+        }
+
+        .debug-panel .test-result {
+            background: #f8f9fa;
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+            border-left: 4px solid #ddd;
+            font-family: monospace;
+            font-size: 12px;
+        }
+
+        .debug-panel .test-result.success {
+            border-left-color: #28a745;
+        }
+
+        .debug-panel .test-result.failure {
+            border-left-color: #dc3545;
+        }
+
+        /* User Identification Form */
+        .identify-form {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            max-width: 400px;
+            margin: 40px auto;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            display: none;
+        }
+
+        .identify-form.active {
+            display: block;
+        }
+
+        .identify-form h2 {
+            margin-bottom: 10px;
+            color: #E50914;
+            font-size: 24px;
+        }
+
+        .identify-form p {
+            margin-bottom: 20px;
+            color: #666;
+            line-height: 1.5;
+        }
+
+        .identify-form input {
+            width: 100%;
+            padding: 12px;
+            margin: 10px 0;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+
+        .identify-form input:focus {
+            outline: none;
+            border-color: #E50914;
+        }
+
+        .identify-form button {
+            width: 100%;
+            padding: 14px;
+            background: #E50914;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+
+        .identify-form button:hover {
+            background: #B20710;
+        }
+
+        .identify-form button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+
+        /* Success Message */
+        .success-message {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            max-width: 400px;
+            margin: 40px auto;
+            text-align: center;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            display: none;
+        }
+
+        .success-message.active {
+            display: block;
+        }
+
+        .success-message .icon {
+            font-size: 48px;
+            color: #28a745;
+            margin-bottom: 15px;
+        }
+
+        .success-message h2 {
+            color: #28a745;
+            margin-bottom: 10px;
+        }
+
+        .success-message p {
+            color: #666;
+        }
+
+        /* Hidden Mode */
+        .hidden-mode {
+            display: none !important;
+        }
     </style>
 </head>
 <body>
-<script>
-// Watershed Configuration
-const WATERSHED = {
-    endpoint: 'https://sandbox.watershedlrs.com/api/organizations/13332/lrs/',
-    auth: 'Basic ' + btoa('dbfc6a0b272af2:a6f64b521d66e5')
-};
+    <!-- Debug Panel (hidden by default) -->
+    <div id="debug-panel" class="debug-panel">
+        <h2>🔍 Cross-Origin Access Test Results</h2>
+        <div id="debug-results"></div>
+    </div>
 
-// Send xAPI statement
-function sendStatement(verb, verbDisplay, objectId, objectName, objectDescription) {
-    const statement = {
-        actor: {
-            mbox: "mailto:user@netflix.com", // Will be dynamically set
-            name: "Netflix User"
-        },
-        verb: {
-            id: verb,
-            display: { "en-US": verbDisplay }
-        },
-        object: {
-            id: objectId,
-            objectType: "Activity",
-            definition: {
-                name: { "en-US": objectName },
-                description: { "en-US": objectDescription },
-                type: "http://adlnet.gov/expapi/activities/course"
-            }
-        },
-        timestamp: new Date().toISOString(),
-        context: {
-            platform: "DOCEBO LMS",
-            language: "en-US"
+    <!-- User Identification Form -->
+    <div id="identify-form" class="identify-form">
+        <h2>Welcome to Netflix NEC</h2>
+        <p>To track your learning progress, please identify yourself:</p>
+        <form id="user-form">
+            <input 
+                type="email" 
+                id="email-input" 
+                placeholder="Your Netflix Email (e.g., name@netflix.com)" 
+                required
+                autocomplete="email">
+            <input 
+                type="text" 
+                id="name-input" 
+                placeholder="Your Full Name" 
+                required
+                autocomplete="name">
+            <button type="submit">Start Tracking</button>
+        </form>
+    </div>
+
+    <!-- Success Message -->
+    <div id="success-message" class="success-message">
+        <div class="icon">✓</div>
+        <h2>Tracking Enabled</h2>
+        <p>Your learning progress is now being tracked.</p>
+    </div>
+
+    <script>
+        // ==========================================
+        // CONFIGURATION
+        // ==========================================
+        const CONFIG = {
+            watershed: {
+                endpoint: 'https://sandbox.watershedlrs.com/api/organizations/13332/lrs/',
+                key: 'dbfc6a0b272af2',
+                secret: 'a6f64b521d66e5',
+                auth: 'Basic ' + btoa('dbfc6a0b272af2:a6f64b521d66e5')
+            },
+            debug: false, // Set to true to show debug panel
+            hiddenMode: false, // Set to true to hide all UI
+            sessionKey: 'necUserInfo'
+        };
+
+        // ==========================================
+        // GLOBAL STATE
+        // ==========================================
+        let userInfo = null;
+        let trackingEnabled = false;
+
+        // ==========================================
+        // UTILITY FUNCTIONS
+        // ==========================================
+        
+        function log(message, data = null) {
+            console.log(`[xAPI Tracker] ${message}`, data || '');
         }
-    };
 
-    fetch(WATERSHED.endpoint + 'statements', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'Authorization': WATERSHED.auth,
-            'X-Experience-API-Version': '1.0.3'
-        },
-        body: JSON.stringify(statement)
-    })
-    .then(response => console.log('xAPI sent:', verbDisplay, objectName))
-    .catch(error => console.error('xAPI error:', error));
-}
+        function addDebugResult(testName, success, message, data = null) {
+            if (!CONFIG.debug) return;
+            
+            const resultsDiv = document.getElementById('debug-results');
+            const resultDiv = document.createElement('div');
+            resultDiv.className = `test-result ${success ? 'success' : 'failure'}`;
+            resultDiv.innerHTML = `
+                <strong>${success ? '✓' : '✗'} ${testName}</strong><br>
+                ${message}
+                ${data ? `<pre>${JSON.stringify(data, null, 2)}</pre>` : ''}
+            `;
+            resultsDiv.appendChild(resultDiv);
+        }
 
-// Listen for messages from parent page
-window.addEventListener('message', function(event) {
-    // Security: verify origin if needed
-    // if (event.origin !== 'https://learn.netflix.net') return;
-    
-    const data = event.data;
-    
-    if (data.action === 'trackClick') {
-        sendStatement(
-            'http://adlnet.gov/expapi/verbs/launched',
-            'launched',
-            data.objectId || window.location.href,
-            data.objectName || 'Unknown',
-            data.objectDescription || ''
-        );
-    } else if (data.action === 'trackView') {
-        sendStatement(
-            'http://adlnet.gov/expapi/verbs/viewed',
-            'viewed',
-            data.objectId || window.location.href,
-            data.objectName || 'Page View',
-            data.objectDescription || ''
-        );
-    }
-});
+        function showElement(id) {
+            const el = document.getElementById(id);
+            if (el) el.classList.add('active');
+        }
 
-// Track page view on load
-window.addEventListener('load', function() {
-    // Get user info from URL parameters if passed
-    const urlParams = new URLSearchParams(window.location.search);
-    const userEmail = urlParams.get('email') || 'unknown@netflix.com';
-    const userName = urlParams.get('name') || 'Unknown User';
-    
-    // Send page view
-    sendStatement(
-        'http://adlnet.gov/expapi/verbs/viewed',
-        'viewed',
-        document.referrer || 'https://learn.netflix.net/nec',
-        'NEC Welcome Lounge',
-        'User viewed Welcome Lounge page'
-    );
-});
+        function hideElement(id) {
+            const el = document.getElementById(id);
+            if (el) el.classList.remove('active');
+        }
 
-// Expose function to parent window
-window.trackEvent = function(eventType, eventData) {
-    if (eventType === 'launch') {
-        sendStatement(
-            'http://adlnet.gov/expapi/verbs/launched',
-            'launched',
-            eventData.url,
-            eventData.name,
-            eventData.description
-        );
-    }
-};
-</script>
+        // ==========================================
+        // USER DETECTION METHODS
+        // ==========================================
+
+        // Method 1: Try to access parent DOM
+        function tryParentDOMAccess() {
+            try {
+                const parentDoc = window.parent.document;
+                
+                // Try multiple selectors
+                const emailSelectors = [
+                    '.user-menu-email',
+                    '[class*="user-menu-email"]',
+                    '[class*="user-email"]',
+                    '.user-email',
+                    '#user-email'
+                ];
+                
+                const nameSelectors = [
+                    '.user-menu-username',
+                    '[class*="user-menu-username"]',
+                    '[class*="username"]',
+                    '.username',
+                    '#username'
+                ];
+                
+                let email = null;
+                let name = null;
+                
+                // Try to find email
+                for (const selector of emailSelectors) {
+                    const el = parentDoc.querySelector(selector);
+                    if (el && el.textContent.trim()) {
+                        email = el.textContent.trim();
+                        break;
+                    }
+                }
+                
+                // Try to find name
+                for (const selector of nameSelectors) {
+                    const el = parentDoc.querySelector(selector);
+                    if (el && el.textContent.trim()) {
+                        name = el.textContent.trim();
+                        break;
+                    }
+                }
+                
+                if (email && name) {
+                    addDebugResult('Parent DOM Access', true, 'Successfully read user from parent DOM', { email, name });
+                    return { email, name };
+                }
+                
+                addDebugResult('Parent DOM Access', false, 'Parent DOM accessible but user info not found');
+                return null;
+                
+            } catch (e) {
+                addDebugResult('Parent DOM Access', false, e.message);
+                return null;
+            }
+        }
+
+        // Method 2: Try to read cookies
+        function tryReadCookies() {
+            try {
+                const cookies = document.cookie;
+                if (!cookies) {
+                    addDebugResult('Cookies', false, 'No cookies accessible');
+                    return null;
+                }
+                
+                const cookieObj = {};
+                cookies.split(';').forEach(cookie => {
+                    const [key, value] = cookie.trim().split('=');
+                    cookieObj[key] = decodeURIComponent(value);
+                });
+                
+                // Try common cookie names
+                const email = cookieObj['user_email'] || 
+                             cookieObj['docebo_user_email'] ||
+                             cookieObj['netflix_email'] ||
+                             cookieObj['email'];
+                
+                const name = cookieObj['user_name'] || 
+                            cookieObj['docebo_user_name'] ||
+                            cookieObj['netflix_name'] ||
+                            cookieObj['name'];
+                
+                if (email && name) {
+                    addDebugResult('Cookies', true, 'Found user info in cookies', { email, name });
+                    return { email, name };
+                }
+                
+                addDebugResult('Cookies', false, 'Cookies found but no user info', cookieObj);
+                return null;
+                
+            } catch (e) {
+                addDebugResult('Cookies', false, e.message);
+                return null;
+            }
+        }
+
+        // Method 3: Try to parse referrer
+        function tryParseReferrer() {
+            try {
+                if (!document.referrer) {
+                    addDebugResult('Referrer', false, 'No referrer available');
+                    return null;
+                }
+                
+                const referrerUrl = new URL(document.referrer);
+                const params = referrerUrl.searchParams;
+                
+                const email = params.get('email') || 
+                             params.get('user') || 
+                             params.get('user_email');
+                
+                const name = params.get('name') || 
+                            params.get('user_name') ||
+                            params.get('username');
+                
+                if (email) {
+                    addDebugResult('Referrer', true, 'Found user info in referrer', { 
+                        email, 
+                        name: name || 'Unknown User',
+                        referrer: document.referrer 
+                    });
+                    return { email, name: name || 'Unknown User' };
+                }
+                
+                addDebugResult('Referrer', false, 'Referrer found but no user info', { 
+                    referrer: document.referrer 
+                });
+                return null;
+                
+            } catch (e) {
+                addDebugResult('Referrer', false, e.message);
+                return null;
+            }
+        }
+
+        // Method 4: Check URL parameters
+        function tryURLParameters() {
+            try {
+                const params = new URLSearchParams(window.location.search);
+                const email = params.get('email');
+                const name = params.get('name');
+                
+                if (email) {
+                    addDebugResult('URL Parameters', true, 'Found user info in URL', { email, name });
+                    return { email, name: name || 'Unknown User' };
+                }
+                
+                addDebugResult('URL Parameters', false, 'No user info in URL parameters');
+                return null;
+                
+            } catch (e) {
+                addDebugResult('URL Parameters', false, e.message);
+                return null;
+            }
+        }
+
+        // Method 5: Check session storage
+        function trySessionStorage() {
+            try {
+                const stored = sessionStorage.getItem(CONFIG.sessionKey);
+                if (stored) {
+                    const user = JSON.parse(stored);
+                    addDebugResult('Session Storage', true, 'Found user info in session storage', user);
+                    return user;
+                }
+                
+                addDebugResult('Session Storage', false, 'No user info in session storage');
+                return null;
+                
+            } catch (e) {
+                addDebugResult('Session Storage', false, e.message);
+                return null;
+            }
+        }
+
+        // Try all detection methods
+        function detectUser() {
+            log('Starting user detection...');
+            
+            // Try methods in order of reliability
+            const methods = [
+                trySessionStorage,      // Check if we already know the user
+                tryURLParameters,       // Check URL params
+                tryParentDOMAccess,     // Try to read from parent page
+                tryReadCookies,         // Try cookies
+                tryParseReferrer        // Try referrer URL
+            ];
+            
+            for (const method of methods) {
+                const result = method();
+                if (result && result.email) {
+                    log('User detected:', result);
+                    return result;
+                }
+            }
+            
+            log('User detection failed - all methods exhausted');
+            return null;
+        }
+
+        // ==========================================
+        // xAPI TRACKING FUNCTIONS
+        // ==========================================
+
+        function sendXAPIStatement(verb, verbDisplay, objectId, objectName, objectDescription) {
+            if (!userInfo) {
+                log('Cannot send xAPI - no user info available');
+                return;
+            }
+            
+            const statement = {
+                actor: {
+                    mbox: `mailto:${userInfo.email}`,
+                    name: userInfo.name,
+                    objectType: "Agent"
+                },
+                verb: {
+                    id: verb,
+                    display: { "en-US": verbDisplay }
+                },
+                object: {
+                    id: objectId,
+                    objectType: "Activity",
+                    definition: {
+                        name: { "en-US": objectName },
+                        description: { "en-US": objectDescription || objectName },
+                        type: "http://adlnet.gov/expapi/activities/course"
+                    }
+                },
+                timestamp: new Date().toISOString(),
+                context: {
+                    platform: "DOCEBO LMS",
+                    language: "en-US",
+                    extensions: {
+                        "http://netflix.com/xapi/nec": "New Employee College"
+                    }
+                }
+            };
+
+            log('Sending xAPI statement:', { verb: verbDisplay, object: objectName });
+
+            fetch(CONFIG.watershed.endpoint + 'statements', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': CONFIG.watershed.auth,
+                    'X-Experience-API-Version': '1.0.3'
+                },
+                body: JSON.stringify(statement)
+            })
+            .then(response => {
+                if (response.ok) {
+                    log(`✓ xAPI statement sent successfully: ${verbDisplay} ${objectName}`);
+                    return response.json();
+                } else {
+                    console.error(`✗ xAPI error: ${response.status} ${response.statusText}`);
+                    throw new Error(`Failed to send statement: ${response.status}`);
+                }
+            })
+            .catch(error => {
+                console.error('✗ xAPI error:', error);
+            });
+        }
+
+        // Convenience functions for common verbs
+        function trackViewed(objectId, objectName, objectDescription) {
+            sendXAPIStatement(
+                'http://adlnet.gov/expapi/verbs/viewed',
+                'viewed',
+                objectId,
+                objectName,
+                objectDescription
+            );
+        }
+
+        function trackLaunched(objectId, objectName, objectDescription) {
+            sendXAPIStatement(
+                'http://adlnet.gov/expapi/verbs/launched',
+                'launched',
+                objectId,
+                objectName,
+                objectDescription
+            );
+        }
+
+        function trackCompleted(objectId, objectName, objectDescription) {
+            sendXAPIStatement(
+                'http://adlnet.gov/expapi/verbs/completed',
+                'completed',
+                objectId,
+                objectName,
+                objectDescription
+            );
+        }
+
+        function trackInteracted(objectId, objectName, objectDescription) {
+            sendXAPIStatement(
+                'http://adlnet.gov/expapi/verbs/interacted',
+                'interacted',
+                objectId,
+                objectName,
+                objectDescription
+            );
+        }
+
+        // ==========================================
+        // USER INTERFACE FUNCTIONS
+        // ==========================================
+
+        function saveUserInfo(user) {
+            try {
+                sessionStorage.setItem(CONFIG.sessionKey, JSON.stringify(user));
+                log('User info saved to session storage');
+            } catch (e) {
+                log('Failed to save user info:', e);
+            }
+        }
+
+        function handleFormSubmit(event) {
+            event.preventDefault();
+            
+            const email = document.getElementById('email-input').value.trim();
+            const name = document.getElementById('name-input').value.trim();
+            
+            if (!email || !name) {
+                alert('Please enter both email and name');
+                return;
+            }
+            
+            userInfo = { email, name };
+            saveUserInfo(userInfo);
+            
+            log('User identified via form:', userInfo);
+            
+            startTracking();
+            showSuccessMessage();
+        }
+
+        function showSuccessMessage() {
+            hideElement('identify-form');
+            showElement('success-message');
+            
+            // Hide success message after 3 seconds if in hidden mode
+            if (CONFIG.hiddenMode) {
+                setTimeout(() => {
+                    hideElement('success-message');
+                }, 3000);
+            }
+        }
+
+        function showIdentifyForm() {
+            if (CONFIG.hiddenMode) {
+                log('Hidden mode - not showing form. Tracking disabled.');
+                return;
+            }
+            
+            showElement('identify-form');
+        }
+
+        // ==========================================
+        // TRACKING INITIALIZATION
+        // ==========================================
+
+        function startTracking() {
+            if (trackingEnabled) {
+                log('Tracking already enabled');
+                return;
+            }
+            
+            trackingEnabled = true;
+            log('Tracking enabled for:', userInfo);
+            
+            // Track initial page view
+            const referrer = document.referrer || 'https://learn.netflix.net/nec';
+            trackViewed(referrer, 'NEC Welcome Lounge', 'User viewed Welcome Lounge page');
+            
+            // Listen for tracking events from parent window
+            window.addEventListener('message', handleTrackingMessage);
+            
+            // Notify parent that tracking is ready
+            if (window.parent !== window) {
+                window.parent.postMessage({ 
+                    trackingReady: true,
+                    user: userInfo 
+                }, '*');
+            }
+            
+            log('Tracking started successfully');
+        }
+
+        function handleTrackingMessage(event) {
+            // Optional: Add origin validation
+            // if (event.origin !== 'https://learn.netflix.net') return;
+            
+            const data = event.data;
+            
+            if (!data || !data.action) return;
+            
+            log('Received tracking message:', data);
+            
+            switch(data.action) {
+                case 'trackLaunch':
+                case 'trackLaunched':
+                    trackLaunched(
+                        data.objectId || 'unknown',
+                        data.objectName || 'Unknown Course',
+                        data.objectDescription || ''
+                    );
+                    break;
+                    
+                case 'trackView':
+                case 'trackViewed':
+                    trackViewed(
+                        data.objectId || window.location.href,
+                        data.objectName || 'Page View',
+                        data.objectDescription || ''
+                    );
+                    break;
+                    
+                case 'trackComplete':
+                case 'trackCompleted':
+                    trackCompleted(
+                        data.objectId || 'unknown',
+                        data.objectName || 'Unknown Course',
+                        data.objectDescription || ''
+                    );
+                    break;
+                    
+                case 'trackInteract':
+                case 'trackInteracted':
+                    trackInteracted(
+                        data.objectId || window.location.href,
+                        data.objectName || 'Interaction',
+                        data.objectDescription || ''
+                    );
+                    break;
+                    
+                default:
+                    log('Unknown tracking action:', data.action);
+            }
+        }
+
+        // ==========================================
+        // INITIALIZATION
+        // ==========================================
+
+        function init() {
+            log('xAPI Tracker initializing...');
+            
+            // Show debug panel if enabled
+            if (CONFIG.debug) {
+                document.getElementById('debug-panel').style.display = 'block';
+            }
+            
+            // Apply hidden mode if enabled
+            if (CONFIG.hiddenMode) {
+                document.body.classList.add('hidden-mode');
+            }
+            
+            // Try to detect user
+            const detectedUser = detectUser();
+            
+            if (detectedUser) {
+                // User detected automatically
+                userInfo = detectedUser;
+                saveUserInfo(userInfo);
+                startTracking();
+                
+                if (!CONFIG.hiddenMode) {
+                    showSuccessMessage();
+                }
+            } else {
+                // Need to show form for user identification
+                log('User not detected - showing identification form');
+                showIdentifyForm();
+            }
+            
+            // Set up form handler
+            const form = document.getElementById('user-form');
+            if (form) {
+                form.addEventListener('submit', handleFormSubmit);
+            }
+            
+            // Expose tracking functions to parent window
+            window.trackEvent = function(eventType, eventData) {
+                handleTrackingMessage({ 
+                    data: { 
+                        action: eventType, 
+                        ...eventData 
+                    } 
+                });
+            };
+            
+            log('xAPI Tracker initialized');
+        }
+
+        // Start when DOM is ready
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', init);
+        } else {
+            init();
+        }
+    </script>
 </body>
 </html>
