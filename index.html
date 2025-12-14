@@ -19,35 +19,48 @@
     <p id="status">Status: initializing…</p>
     <p>Now: <code id="now"></code></p>
   </div>
-  <script>
-    const sessionId = crypto.randomUUID();
-    const startedAt = Date.now();
-    const HEARTBEAT_MS = 30000; // 30s
-    const iso = (t) => new Date(t).toISOString();
+ <script>
+  const RELAY = "https://YOUR-RENDER-URL/track"; // ← paste your /track URL
+  const ACTIVITY = "https://docebo-netflix.github.io/xapi-tracking/";
+  const sessionStart = Date.now();
 
-    async function send(eventType, extra={}) {
-      const payload = { sessionId, eventType, ts: iso(Date.now()), ...extra };
-      console.log("EVENT ➜", payload);
-      // Later: POST to your server, not directly to Watershed.
-      // await fetch("https://yourserver.example/track", { method:"POST", headers:{"content-type":"application/json"}, body: JSON.stringify(payload) });
+  // TODO: replace with real identity later (LTI claims or signed JWT)
+  const userEmail = "test@example.com";
+  const userName  = "Test Learner";
+
+  async function send(eventType, extra={}) {
+    try {
+      await fetch(RELAY, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          eventType,
+          userEmail,
+          userName,
+          activityId: ACTIVITY,
+          courseId: "docebo:course:COURSE_ID",
+          ...extra
+        })
+      });
+    } catch (e) {
+      console.warn("relay error", e);
     }
+  }
 
-    // Arrival
-    send("initialized", { startedAt: iso(startedAt) });
+  // Arrived
+  send("initialized");
 
-    // Heartbeat
-    const hb = setInterval(() => send("heartbeat"), HEARTBEAT_MS);
+  // Heartbeat (optional, improves “left” accuracy)
+  const hb = setInterval(() => send("interacted"), 30000);
 
-    // Leave (best-effort)
-    addEventListener("pagehide", () => {
-      const durSec = (Date.now() - startedAt)/1000;
-      send("terminated", { durationSec: Math.round(durSec) });
-      clearInterval(hb);
-    });
+  // Left (best-effort)
+  addEventListener("pagehide", () => {
+    clearInterval(hb);
+    const dur = (Date.now() - sessionStart) / 1000;
+    send("terminated", { durationSec: Math.round(dur) });
+  });
+</script>
 
-    // UI clock
-    setInterval(()=>{ document.getElementById("now").textContent = iso(Date.now()); }, 1000);
-    document.getElementById("status").textContent = "running";
-  </script>
 </body>
 </html>
+
