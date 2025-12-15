@@ -1,4 +1,3 @@
-<script>
 // ================== CONFIG ==================
 const HEARTBEAT_MS = 30000; // 30s
 const RELAY = "https://xapi-tracking.onrender.com/track"; // <— REPLACE with your live /track URL
@@ -19,6 +18,23 @@ const logEl = el('log');
 // State
 let sessionStart = null;
 let hbTimer = null;
+
+console.log("app.js loaded v3");
+document.addEventListener("DOMContentLoaded", () => console.log("DOM ready"));
+
+function safeStart() {
+  try { 
+    console.log("calling startSession()");
+    startSession();
+  } catch (e) {
+    console.error("startSession error:", e);
+  }
+}
+// fire on all the usual hooks + a tiny fallback
+document.addEventListener('DOMContentLoaded', safeStart);
+window.addEventListener('load', safeStart);
+setTimeout(safeStart, 600);
+
 
 // Helpers
 const iso = (t)=> new Date(t).toISOString();
@@ -81,7 +97,6 @@ el('beatBtn').addEventListener('click', ()=> send("interacted"));
 el('stopBtn').addEventListener('click', stopSession);
 
 // Auto flow
-window.addEventListener('load', startSession);
 window.addEventListener('pagehide', stopSession);
 
 // UI clock
@@ -90,4 +105,3 @@ setInterval(()=>{
   nowEl.textContent = iso(t);
   durEl.textContent = sessionStart ? Math.round((t - sessionStart)/1000) : 0;
 }, 1000);
-</script>
