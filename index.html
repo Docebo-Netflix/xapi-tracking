@@ -13,6 +13,28 @@
                  script-src 'self';
                  connect-src 'self' https:;
                  frame-ancestors *;">
+  <style>
+    :root { --bg:#0b0c10; --panel:#11141a; --text:#e8eef5; --muted:#9aa4b2; --ok:#22c55e; --warn:#f59e0b; --bad:#f87171; }
+    html, body { height:100%; margin:0; background:var(--bg); color:var(--text); font:16px/1.45 system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
+    .wrap { max-width: 840px; margin: 32px auto; padding: 0 16px; }
+    h1 { font-size: 1.25rem; margin: 0 0 12px; }
+    .card { background: var(--panel); border: 1px solid #1e2633; border-radius: 14px; padding: 16px; }
+    .row { display:flex; gap:12px; flex-wrap:wrap; margin-bottom:12px; }
+    .row > * { flex: 1 1 240px; }
+    label { display:block; font-size:.85rem; color:var(--muted); margin-bottom:6px; }
+    input { width:100%; padding:10px 12px; border-radius:10px; border:1px solid #2a3140; background:#0f131a; color:var(--text); }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    button { cursor:pointer; border:0; border-radius:10px; padding:10px 14px; background:#334155; color:#fff; }
+    button.secondary { background:#1f2937; }
+    button.danger { background:#7f1d1d; }
+    .pill { display:inline-flex; align-items:center; gap:8px; padding:6px 10px; border-radius:999px; font-size:.85rem; }
+    .ok { background: rgba(34,197,94,.15); color: var(--ok); }
+    .warn { background: rgba(245,158,11,.15); color: var(--warn); }
+    .bad { background: rgba(248,113,113,.15); color: var(--bad); }
+    .log { max-height: 260px; overflow:auto; background:#0b0f14; border:1px solid #1f2430; border-radius: 10px; padding: 10px; font-size: .9rem; }
+    .muted { color: var(--muted); }
+    .small { font-size: .85rem; }
+  </style>
 </head>
 <body>
   <div class="wrap">
@@ -58,100 +80,9 @@
     </div>
   </div>
 
-  <script>
-    // ================== CONFIG ==================
-    const HEARTBEAT_MS = 30000; // 30s
-    const RELAY = "https://xapi-tracking.onrender.com/track"; // <— REPLACE with your live /track URL
-    // ============================================
-
-    // DOM refs
-    const el = (id)=>document.getElementById(id);
-    const relayEl = el('relay');
-    const activityEl = el('activity');
-    const emailEl = el('email');
-    const nameEl = el('name');
-    const statusEl = el('status');
-    const startedAtEl = el('startedAt');
-    const nowEl = el('now');
-    const durEl = el('dur');
-    const logEl = el('log');
-
-    // State
-    let sessionStart = null;
-    let hbTimer = null;
-
-    // Helpers
-    const iso = (t)=> new Date(t).toISOString();
-    const log = (obj)=> {
-      const line = typeof obj === 'string' ? obj : JSON.stringify(obj);
-      const ts = new Date().toLocaleTimeString();
-      logEl.textContent = `[${ts}] ${line}\n` + logEl.textContent;
-    };
-    const badge = (kind, text)=>{
-      statusEl.className = `pill ${kind}`;
-      statusEl.textContent = text;
-    };
-
-    async function send(eventType, extra={}) {
-      const relayUrl = (relayEl.value || RELAY).trim();
-      const payload = {
-        eventType,
-        userEmail: emailEl.value.trim(),
-        userName:  nameEl.value.trim(),
-        activityId: activityEl.value.trim(),
-        ...extra
-      };
-      try {
-        const res = await fetch(relayUrl, {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify(payload),
-          keepalive: eventType === "terminated" // helps on pagehide
-        });
-        const body = await res.json().catch(()=> ({}));
-        log({ sent: payload, status: res.status, ok: res.ok, body });
-        return res.ok;
-      } catch (e) {
-        log({ error: String(e) });
-        return false;
-      }
-    }
-
-    function startSession() {
-      if (sessionStart) return;
-      sessionStart = Date.now();
-      startedAtEl.textContent = iso(sessionStart);
-      badge('ok','running');
-      send("initialized");
-      hbTimer = setInterval(()=> send("interacted"), HEARTBEAT_MS);
-    }
-
-    function stopSession() {
-      if (!sessionStart) return;
-      const dur = Math.round((Date.now() - sessionStart)/1000);
-      send("terminated", { durationSec: dur });
-      clearInterval(hbTimer); hbTimer = null;
-      sessionStart = null;
-      badge('warn','idle');
-    }
-
-    // Manual buttons
-    el('startBtn').addEventListener('click', startSession);
-    el('beatBtn').addEventListener('click', ()=> send("interacted"));
-    el('stopBtn').addEventListener('click', stopSession);
-
-    // Auto flow
-    window.addEventListener('load', startSession);
-    window.addEventListener('pagehide', stopSession);
-
-    // UI clock
-    setInterval(()=>{
-      const t = Date.now();
-      nowEl.textContent = iso(t);
-      durEl.textContent = sessionStart ? Math.round((t - sessionStart)/1000) : 0;
-    }, 1000);
-  </script>
+ 
 </body>
 </html>
+
 
 
