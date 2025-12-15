@@ -43,9 +43,12 @@ const log = (obj)=> {
   const ts = new Date().toLocaleTimeString();
   logEl.textContent = `[${ts}] ${line}\n` + logEl.textContent;
 };
-const badge = (kind, text)=>{
-  statusEl.className = `pill ${kind}`;
-  statusEl.textContent = text;
+
+const badge = (kind, text) => {
+  const n = document.getElementById('status');
+  if (!n) { console.warn("statusEl missing"); return; }
+  n.className = `pill ${kind}`;
+  n.textContent = text;
 };
 
 async function send(eventType, extra={}) {
@@ -105,3 +108,4 @@ setInterval(()=>{
   nowEl.textContent = iso(t);
   durEl.textContent = sessionStart ? Math.round((t - sessionStart)/1000) : 0;
 }, 1000);
+
